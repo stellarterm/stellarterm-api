@@ -9,7 +9,7 @@ const PQueue = require('p-queue');
 const queue = new PQueue({concurrency: 20});
 const run = queue.add;
 
-const {HORIZON_SERVER} = require('./horizon-server.constant');
+const { HORIZON_SERVER } = require('./horizon-server.constant');
 
 const directory = require('stellarterm-directory');
 
@@ -31,7 +31,7 @@ function tickerGenerator() {
 }
 
 function tickerDataGenerator(opts) {
-    const {ignoreLog} = opts;
+    const { ignoreLog } = opts;
     if (ignoreLog) {
         this.console.log = () => {
         };
@@ -41,6 +41,7 @@ function tickerDataGenerator(opts) {
             start: Math.floor(Date.now() / 1000),
             startISO: Date(),
             apiLicense: 'Apache-2.0',
+            directoryBuild: directory.getBuildId(),
         },
     };
 
@@ -100,7 +101,7 @@ function loadAssets(ticker) {
         website: 'https://www.stellar.org/lumens/',
         price_XLM: 1, // LOL 1 dogecoin = 1 dogecoin; 1 lumen = 1 lumen
         price_USD: ticker._meta.externalPrices.USD_XLM,
-    })
+    });
     _.each(directory.assets, (asset, id) => {
         let r = {};
         r.id = id;

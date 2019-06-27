@@ -9,12 +9,6 @@ if [ -z "$STELLARTERM_AWS_PROFILE" ]; then
     exit 1
 fi
 
-(cd ./../directory/ && ./checkBuild.sh)
-if [ $? == 1 ]
-then
-    exit 1
-fi
-
 export BRANCH="$(git branch | grep \* | cut -d ' ' -f2)"
 
 if [ $BRANCH != "master" ] && [ $BRANCH != "staging" ]
