@@ -1,7 +1,12 @@
 node_modules/
+jspm_packages
 package-lock.json
+.idea/
 
-.idea
+./setEnvironment.sh
+setStagingEnvironment.sh
+
+# Serverless directories
 .serverless
 
 output/

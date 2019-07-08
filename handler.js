@@ -1,7 +1,6 @@
 'use strict';
 
-const tickerGenerator = require('./functions/ticker');
-const fetch = require('node-fetch');
+const { tickerGenerator } = require('./functions/ticker');
 const AWS = require('aws-sdk'); // eslint-disable-line import/no-extraneous-dependencies
 const _ = require('lodash');
 

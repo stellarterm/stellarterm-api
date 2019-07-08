@@ -23,5 +23,8 @@
     "request-promise": "^4.2.1",
     "stellar-sdk": "^1.0.2",
     "stellarterm-directory": "git+https://github.com/stellarterm/stellarterm-directory.git"
+  },
+  "engines": {
+    "node": ">=7.4.0 <11.0.0"
   }
 }
