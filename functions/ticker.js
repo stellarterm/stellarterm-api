@@ -264,7 +264,6 @@ function phase4(ticker) {
             asset.activityScore = 0;
             return;
         }
-        let directoryAsset = directory.assets[asset.id];
 
         // Having the full amount of 20 bids and asks on each side is important since
         // it makes the market look like there is activity
@@ -280,11 +279,7 @@ function phase4(ticker) {
         // Just $100 volume gets the asset a nice bonus
         let nonzeroVolumeBonus = Math.min(1, asset.volume24h_USD / 100); // [0,1]
 
-        // IOUs represent an inherent risk to the user
-        // Whereas tokens are already "useless"
-        let tokenBonus = directoryAsset.type === 'token' ? 5 : 0;
-
-        let bonuses = numOffersScore + constantActivityBonus + nonzeroVolumeBonus + tokenBonus;
+        let bonuses = numOffersScore + constantActivityBonus + nonzeroVolumeBonus;
 
         // For assets to do well, they don't need to have all the metrics so that
         // assets that dont do well in one category won't get punished.
