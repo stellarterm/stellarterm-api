@@ -25,5 +25,7 @@ fi
 printf "\033[1;33mStarting API deploy\n"
 printf "Stage for deploy is $BRANCH\033[0m\n"
 
+rm -rf ./node_modules
+npm i
 serverless --aws-profile $STELLARTERM_AWS_PROFILE deploy
 # serverless --aws-profile $STELLARTERM_AWS_PROFILE deploy function -f ticker
