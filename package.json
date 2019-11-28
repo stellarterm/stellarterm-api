@@ -12,7 +12,7 @@
     "url": "https://github.com/stellarterm/stellarterm-api/issues"
   },
   "scripts": {
-    "deploy": "source ./setEnvironment.sh && ./deploy.sh"
+    "deploy": "source ./setStagingEnvironment.sh && ./deploy.sh"
   },
   "homepage": "https://github.com/stellarterm/stellarterm-api",
   "dependencies": {
