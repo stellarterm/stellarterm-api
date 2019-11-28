@@ -11,6 +11,9 @@
   "bugs": {
     "url": "https://github.com/stellarterm/stellarterm-api/issues"
   },
+  "scripts": {
+    "deploy": "source ./setEnvironment.sh && ./deploy.sh"
+  },
   "homepage": "https://github.com/stellarterm/stellarterm-api",
   "dependencies": {
     "aws-sdk": "^2.465.0",

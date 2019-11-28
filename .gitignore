@@ -10,3 +10,4 @@ setStagingEnvironment.sh
 .serverless
 
 output/
+/setEnvironment.sh
