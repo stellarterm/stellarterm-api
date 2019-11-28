@@ -23,6 +23,7 @@ functions:
     handler: handler.ticker
     environment:
       BUCKET: ${self:custom.bucket}
+      COIN_MARKET_CUP_KEY: ${env:COIN_MARKET_CUP_KEY}
   cronTicker:
     handler: handler.ticker
     events:
@@ -30,3 +31,4 @@ functions:
       - schedule: rate(1 minute)
     environment:
       BUCKET: ${self:custom.bucket}
+      COIN_MARKET_CUP_KEY: ${env:COIN_MARKET_CUP_KEY}

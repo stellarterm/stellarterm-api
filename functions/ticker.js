@@ -3,11 +3,9 @@ const _ = require('lodash');
 const rp = require('request-promise');
 const StellarSdk = require('stellar-sdk');
 const niceRound = require('./utils/niceRound');
-const tradeWalker = require('./utils/tradeWalker');
 
 const PQueue = require('p-queue');
 const queue = new PQueue({concurrency: 20});
-const run = queue.add;
 
 const { HORIZON_SERVER } = require('./horizon-server.constant');
 
@@ -69,7 +67,7 @@ function phase1(ticker) {
         ,
         getExternalPrices()
             .then(externalPrices => {
-                console.log('Phase 1: Finished external prices')
+                console.log('Phase 1: Finished external prices');
                 console.log(JSON.stringify(externalPrices, null, 2));
                 ticker._meta.externalPrices = externalPrices;
 
@@ -77,9 +75,15 @@ function phase1(ticker) {
                 ticker._meta.externalPrices.USD_XLM_24hAgo = ticker._meta.externalPrices.USD_XLM;
             })
             .then(() => {
-                return rp('https://api.coinmarketcap.com/v1/ticker/stellar/')
+                return rp({
+                  method: 'GET',
+                  uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
+                  headers: {'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY},
+                  json: true,
+                  gzip: true
+                })
                     .then(cmcTickerJson => {
-                        let cmcStellar = JSON.parse(cmcTickerJson)[0];
+                        let cmcStellar = cmcTickerJson.data.XLM.quote.USD;
                         let newPriceRatio = 1 + Number(cmcStellar.percent_change_24h) / 100;
                         let oldPrice = (1 / newPriceRatio) * ticker._meta.externalPrices.USD_XLM;
                         ticker._meta.externalPrices.USD_XLM_24hAgo = _.round(oldPrice, 6);
