@@ -1,5 +1,5 @@
 rm output/v1/ticker.json
-source setEnvironment.sh
+source setStagingEnvironment.sh
 node localTicker.js
 echo '================================================================'
 echo
