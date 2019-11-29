@@ -23,7 +23,19 @@ function tickerGenerator() {
         .then(() => tickerDataGenerator({}))
         .then((ticker) => {
             return {
-                'v1/ticker.json': ticker
+                'v1/ticker.json': ticker,
+                'v1/ticker-state.json': JSON.stringify({
+                    tickerState: 'Ticker successfully generated',
+                    error: null
+                })
+            };
+        })
+        .catch((e) => {
+            return {
+              'v1/ticker-state.json': JSON.stringify({
+                    tickerState: 'Ticker generation failed',
+                    error: e,
+                }),
             };
         })
 }
