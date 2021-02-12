@@ -11,8 +11,9 @@ const { HORIZON_SERVER } = require('./horizon-server.constant');
 
 const directory = require('stellarterm-directory');
 
-Server = new StellarSdk.Server(HORIZON_SERVER);
-StellarSdk.Network.usePublicNetwork();
+Server = new StellarSdk.Server(HORIZON_SERVER, {
+  appName: 'StellarTerm-JS-Backend'
+});
 
 function medianOf3(a, b, c) {
     return [a, b, c].sort()[1];

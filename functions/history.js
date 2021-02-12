@@ -11,10 +11,7 @@ const { HORIZON_SERVER } = require('./horizon-server.constant');
 
 const directory = require('stellarterm-directory');
 
-StellarSdk.Network.usePublicNetwork();
-
-S = new StellarSdk.Server(HORIZON_SERVER);
-StellarSdk.Network.usePublicNetwork();
+S = new StellarSdk.Server(HORIZON_SERVER, { appName: 'StellarTerm-JS-Backend'});
 
 function historyGenerator() {
     let ticker = {
