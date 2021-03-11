@@ -24,7 +24,7 @@
     "p-queue": "^2.1.0",
     "request": "^2.88.0",
     "request-promise": "^4.2.1",
-    "stellar-sdk": "^1.0.2",
+    "stellar-sdk": "8.0.0",
     "stellarterm-directory": "git+https://github.com/stellarterm/stellarterm-directory.git#staging"
   },
   "engines": {
