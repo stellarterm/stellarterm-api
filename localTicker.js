@@ -4,9 +4,10 @@ const _ = require('lodash');
 const mkdirp = require('mkdirp');
 
 tickerGenerator()
-    .then(files => {
+    .then(({files, log}) => {
+        mkdirp.sync('./output/v1');
         _.each(files, (contents, filename) => {
-            mkdirp.sync('./output/v1');
             fs.writeFileSync('./output/' + filename, contents, 'utf8');
-        })
+        });
+        fs.writeFileSync('./output/v1/log.txt', log, 'utf8');
     });
