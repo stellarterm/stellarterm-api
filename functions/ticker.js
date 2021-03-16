@@ -3,9 +3,7 @@ const _ = require('lodash');
 const rp = require('request-promise');
 const StellarSdk = require('stellar-sdk');
 const niceRound = require('./utils/niceRound');
-
-const PQueue = require('p-queue');
-const queue = new PQueue({concurrency: 20});
+const Logger = require('./utils/logger');
 
 const { HORIZON_SERVER } = require('./horizon-server.constant');
 
@@ -15,38 +13,52 @@ Server = new StellarSdk.Server(HORIZON_SERVER, {
   appName: 'StellarTerm-JS-Backend'
 });
 
+const TickerLogger = new Logger('Ticker successfully generated');
+const StepLogger = new Logger('Ticker successfully generated');
+StepLogger.setConsoleLogState(false);
+
 function medianOf3(a, b, c) {
     return [a, b, c].sort()[1];
 }
 
 function tickerGenerator() {
+    TickerLogger.reset();
+    StepLogger.reset();
     return Promise.resolve()
         .then(() => tickerDataGenerator({}))
         .then((ticker) => {
+            StepLogger.log(`\nTicker generation succeeded`);
             return {
-                'v1/ticker.json': ticker,
-                'v1/ticker-state.json': JSON.stringify({
-                    tickerState: 'Ticker successfully generated',
-                    error: null
-                })
+                files: {
+                    'v1/ticker.json': ticker,
+                    'v1/ticker-state.json': JSON.stringify({
+                        tickerState: 'Ticker successfully generated',
+                        error: null
+                    })
+                },
+                log: StepLogger.getLogHistory(true)
             };
         })
         .catch((e) => {
+            StepLogger.error(`Ticker generation failed`);
+            if (e) {
+              StepLogger.log(JSON.stringify(e), e.message || '', e.detail || '');
+            }
             return {
-              'v1/ticker-state.json': JSON.stringify({
-                    tickerState: 'Ticker generation failed',
-                    error: e,
-                }),
+                files: {
+                    'v1/ticker-state.json': JSON.stringify({
+                        tickerState: 'Ticker generation failed',
+                        error: e,
+                    }),
+                },
+                log: StepLogger.getLogHistory()
             };
         })
 }
 
 function tickerDataGenerator(opts) {
     const { ignoreLog } = opts;
-    if (ignoreLog) {
-        this.console.log = () => {
-        };
-    }
+    TickerLogger.setConsoleLogState(!ignoreLog);
     let ticker = {
         _meta: {
             start: Math.floor(Date.now() / 1000),
@@ -64,6 +76,7 @@ function tickerDataGenerator(opts) {
 }
 
 function phase1(ticker) {
+    StepLogger.log('\nStart Phase 1');
     return Promise.all([
         getHorizonMain()
             .then(main => {
@@ -80,14 +93,15 @@ function phase1(ticker) {
         ,
         getExternalPrices()
             .then(externalPrices => {
-                console.log('Phase 1: Finished external prices');
-                console.log(JSON.stringify(externalPrices, null, 2));
+                TickerLogger.log('Phase 1: Finished external prices');
+                TickerLogger.log(JSON.stringify(externalPrices, null, 2));
                 ticker._meta.externalPrices = externalPrices;
 
                 // Just incase CMC is down
                 ticker._meta.externalPrices.USD_XLM_24hAgo = ticker._meta.externalPrices.USD_XLM;
             })
             .then(() => {
+                StepLogger.log(`Phase 1: start coinmarketcap request`);
                 return rp({
                   method: 'GET',
                   uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
@@ -96,6 +110,7 @@ function phase1(ticker) {
                   gzip: true
                 })
                     .then(cmcTickerJson => {
+                        StepLogger.log(`Phase 1: coinmarketcap request success`);
                         let cmcStellar = cmcTickerJson.data.XLM.quote.USD;
                         let newPriceRatio = 1 + Number(cmcStellar.percent_change_24h) / 100;
                         let oldPrice = (1 / newPriceRatio) * ticker._meta.externalPrices.USD_XLM;
@@ -107,6 +122,7 @@ function phase1(ticker) {
 }
 
 function loadAssets(ticker) {
+    StepLogger.log(`\nStarting Phase 2: loadAssets()`);
     ticker.assets = [];
 
     ticker.assets.push({
@@ -129,9 +145,11 @@ function loadAssets(ticker) {
         r.website = directory.anchors[asset.domain].website;
         ticker.assets.push(r)
     });
+    StepLogger.log(`Phase 2: completed`);
 }
 
 function phase3(ticker) {
+    StepLogger.log(`\nStarting Phase 3`);
     ticker.pairs = {};
     _.each(directory.pairs, (pairData, id) => {
         ticker.pairs[id] = {
@@ -235,9 +253,7 @@ function phase3(ticker) {
                             pair.volume24h_XLM = niceRound(_.sumBy(trades.records, record => Number(record.counter_volume)));
                         } else {
                             // TODO: Add num trades for other trade pairs too
-                            console.error();
-                            console.error('Error: No support in StellarTerm ticker for pairs without XLM. ' + pairSlug);
-                            console.error();
+                            TickerLogger.error('Error: No support in StellarTerm ticker for pairs without XLM. ' + pairSlug);
                             return;
                         }
 
@@ -245,7 +261,7 @@ function phase3(ticker) {
                         asset.numTrades24h = pair.numTrades24h;
                         asset._numTradeRecords24h = trades.records.length;
 
-                        console.log('Phase 3: ', _.padEnd(pairSlug, 40), _.padStart(pair.numTrades24h + ' trades', 12), _.padStart(asset.price_XLM + ' XLM', 14), _.padStart('$' + asset.price_USD.toFixed(2), 9), 'Change XLM : ' + _.padStart(asset.change24h_XLM, 6) + '%', 'Change USD : ' + _.padStart(asset.change24h_USD, 6) + '%', _.padStart(trades.records.length, 4) + ' records')
+                        TickerLogger.log('Phase 3: ', _.padEnd(pairSlug, 40), _.padStart(pair.numTrades24h + ' trades', 12), _.padStart(asset.price_XLM + ' XLM', 14), _.padStart('$' + asset.price_USD.toFixed(2), 9), 'Change XLM : ' + _.padStart(asset.change24h_XLM, 6) + '%', 'Change USD : ' + _.padStart(asset.change24h_USD, 6) + '%', _.padStart(trades.records.length, 4) + ' records')
 
                         asset.volume24h_XLM = pair.volume24h_XLM;
                         asset.volume24h_USD = niceRound(pair.volume24h_XLM * ticker._meta.externalPrices.USD_XLM);
@@ -264,12 +280,14 @@ function phase3(ticker) {
             })
     }))
         .then(() => {
+            StepLogger.log(`Phase 3: all requests succeeded`);
             ticker.assets[0].volume24h_XLM = niceRound(lumenVolumeXLM);
             ticker.assets[0].volume24h_USD = niceRound(lumenVolumeUSD);
         });
 }
 
 function phase4(ticker) {
+    StepLogger.log(`\nStarting Phase 4`);
     // Assign a score to each asset
     _.each(ticker.assets, asset => {
         if (asset.id === 'XLM-native') {
@@ -329,7 +347,7 @@ function phase4(ticker) {
         let spreadPenalty = Math.pow((1 - asset.spread), 3); // range: [0,1]
 
         asset.activityScore = spreadPenalty * (bonuses + depth10Score + volumeScore + numTradesScore);
-        console.log('Phase 4: ', _.padEnd(asset.slug, 25), 'Score:', _.padStart(_.round(asset.activityScore, 3), 6), ' Inputs:', spreadPenalty.toFixed(3) + ' * (',
+        TickerLogger.log('Phase 4: ', _.padEnd(asset.slug, 25), 'Score:', _.padStart(_.round(asset.activityScore, 3), 6), ' Inputs:', spreadPenalty.toFixed(3) + ' * (',
             _.padStart(bonuses.toFixed(3), 6), '+',
             _.padStart(depth10Score.toFixed(3), 6), '+',
             _.padStart(volumeScore.toFixed(3), 6), '+',
@@ -338,7 +356,7 @@ function phase4(ticker) {
         );
     });
 
-    console.log('Phase 4 explanation: spreadPenalty * (bonuses + depth10Score + volumeScore + numTradesScore)');
+    TickerLogger.log('Phase 4 explanation: spreadPenalty * (bonuses + depth10Score + volumeScore + numTradesScore)');
 
     ticker.assets.sort((a, b) => {
         return b.activityScore - a.activityScore;
@@ -346,7 +364,8 @@ function phase4(ticker) {
 
     _.each(ticker.assets, asset => {
         asset.activityScore = _.round(asset.activityScore, 3);
-    })
+    });
+    StepLogger.log(`Phase 4: complete`);
 }
 
 function getExternalPrices() {
@@ -355,6 +374,7 @@ function getExternalPrices() {
         getLumenPrice(),
     ])
         .then(externalData => {
+            StepLogger.log(`Phase 1: getExternalPrices() success`);
             return {
                 USD_BTC: externalData[0],
                 BTC_XLM: externalData[1],
@@ -368,7 +388,7 @@ function getBtcPrice() {
         rp('https://api.coindesk.com/v1/bpi/currentprice.json')
             .then(data => {
                 let price = _.round(JSON.parse(data).bpi.USD.rate_float, 3);
-                console.log('Phase 1: Coindesk BTC price ', price);
+                TickerLogger.log('Phase 1: Coindesk BTC price ', price);
                 return price;
             })
             .catch(() => {
@@ -378,7 +398,7 @@ function getBtcPrice() {
         rp('https://api.bitfinex.com/v2/ticker/tBTCUSD')
             .then(data => {
                 let price = _.round(JSON.parse(data)[2], 3);
-                console.log('Phase 1: Bitfinex BTC price ', price);
+                TickerLogger.log('Phase 1: Bitfinex BTC price ', price);
                 return price;
             })
             .catch(() => {
@@ -388,7 +408,7 @@ function getBtcPrice() {
         rp('https://api.coinbase.com/v2/prices/spot?currency=USD')
             .then(data => {
                 let price = _.round(JSON.parse(data).data.amount, 3);
-                console.log('Phase 1: Coinbase BTC price ', price);
+                TickerLogger.log('Phase 1: Coinbase BTC price ', price);
                 return price;
             })
             .catch(() => {
@@ -398,7 +418,7 @@ function getBtcPrice() {
         rp('https://api.kraken.com/0/public/Ticker?pair=XBTUSD')
             .then(data => {
                 let price = _.round(JSON.parse(data).result.XXBTZUSD.c[0], 3);
-                console.log('Phase 1: Kraken   BTC price ', price);
+                TickerLogger.log('Phase 1: Kraken   BTC price ', price);
                 return price;
             })
             .catch(() => {
@@ -407,7 +427,7 @@ function getBtcPrice() {
     ])
         .then(allPrices => {
             let btcPrice = _.round(_.mean(_.filter(allPrices, price => price !== null)), 2);
-            console.log('Phase 1: BTC price = $' + btcPrice);
+            TickerLogger.log('Phase 1: BTC price = $' + btcPrice);
             return btcPrice;
         })
 }
@@ -441,7 +461,7 @@ function getLumenPrice() {
     ])
         .then(allPrices => {
             let xlmPrice = _.round(_.mean(_.filter(allPrices, price => price !== null)), 8);
-            console.log('Phase 1: XLM price ' + xlmPrice + ' XLM/BTC');
+            TickerLogger.log('Phase 1: XLM price ' + xlmPrice + ' XLM/BTC');
             return xlmPrice;
         })
 }
@@ -450,25 +470,29 @@ function getHorizonMain() {
     return rp(HORIZON_SERVER)
         .then(horizonMainJson => {
             let horizonMain = JSON.parse(horizonMainJson);
-            console.log('Phase 1: Horizon at ledger #' + horizonMain.core_latest_ledger);
+            StepLogger.log(`Phase 1: getHorizonMain() success. HORIZON_SERVER = ${HORIZON_SERVER}`);
+            TickerLogger.log('Phase 1: Horizon at ledger #' + horizonMain.core_latest_ledger);
             return horizonMain;
         })
 }
 
 function getStellarTermDotComVersion() {
-    console.log('Phase 1: Fetching stellarterm.com');
+    TickerLogger.log('Phase 1: Fetching stellarterm.com');
     return rp('https://stellarterm.com/')
         .then(indexHtml => {
             let search = indexHtml.match(/stBuildInfo=\{version:(\d+)/);
             if (search.length === 2) {
-                console.log('Phase 1: https://stellarterm.com/ is at version ' + search[1]);
+                TickerLogger.log('Phase 1: https://stellarterm.com/ is at version ' + search[1]);
+                StepLogger.log(`Phase 1: getStellarTermDotComVersion() success. version = ${search[1]}`);
                 return search[1];
             }
-            console.log('Phase 1: Unable to find version');
+            TickerLogger.error('Phase 1: Unable to find version');
+            StepLogger.error(`---------------> Phase 1: getStellarTermDotComVersion() error`);
             return -1; // Return 0 when couldn't find anything
         })
         .catch(err => {
-            console.error('Phase 1 StellarTerm.com version error: ' + err.message);
+            StepLogger.error(`---------------> Phase 1: getStellarTermDotComVersion() error ${err.message}`);
+            TickerLogger.error('Phase 1 StellarTerm.com version error: ' + err.message);
             return -1;
         })
 }
