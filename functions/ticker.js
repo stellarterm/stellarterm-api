@@ -83,12 +83,14 @@ function phase1(ticker) {
                 ticker._meta.horizon = {
                     core_latest_ledger: main.core_latest_ledger,
                     network_passphrase: main.network_passphrase,
-                }
+                };
+                StepLogger.log(`Phase 1: getHorizonMain() success. HORIZON_SERVER = ${HORIZON_SERVER}`);
             })
         ,
         getStellarTermDotComVersion()
             .then(version => {
                 ticker._meta.stellarTermVersion = version;
+                StepLogger.log(`Phase 1: getStellarTermDotComVersion() success. version = ${version}`);
             })
         ,
         getExternalPrices()
@@ -99,26 +101,32 @@ function phase1(ticker) {
 
                 // Just incase CMC is down
                 ticker._meta.externalPrices.USD_XLM_24hAgo = ticker._meta.externalPrices.USD_XLM;
+                StepLogger.log(`Phase 1: Finished external prices`);
             })
             .then(() => {
                 StepLogger.log(`Phase 1: start coinmarketcap request`);
                 return rp({
-                  method: 'GET',
-                  uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
-                  headers: {'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY},
-                  json: true,
-                  gzip: true
+                    method: 'GET',
+                    uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
+                    headers: {'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY},
+                    json: true,
+                    gzip: true
                 })
-                    .then(cmcTickerJson => {
-                        StepLogger.log(`Phase 1: coinmarketcap request success`);
-                        let cmcStellar = cmcTickerJson.data.XLM.quote.USD;
-                        let newPriceRatio = 1 + Number(cmcStellar.percent_change_24h) / 100;
-                        let oldPrice = (1 / newPriceRatio) * ticker._meta.externalPrices.USD_XLM;
-                        ticker._meta.externalPrices.USD_XLM_24hAgo = _.round(oldPrice, 6);
-                        ticker._meta.externalPrices.USD_XLM_change = _.round(cmcStellar.percent_change_24h, 6);
-                    })
             })
-    ])
+            .then(cmcTickerJson => {
+                StepLogger.log(`Phase 1: coinmarketcap response received`);
+                if (!cmcTickerJson.data.XLM) {
+                  StepLogger.error(`Coinmarketcap missing response: ${JSON.stringify(cmcTickerJson)}`);
+                } else {
+                  let cmcStellar = cmcTickerJson.data.XLM.quote.USD;
+                  let newPriceRatio = 1 + Number(cmcStellar.percent_change_24h) / 100;
+                  let oldPrice = (1 / newPriceRatio) * ticker._meta.externalPrices.USD_XLM;
+                  ticker._meta.externalPrices.USD_XLM_24hAgo = _.round(oldPrice, 6);
+                  ticker._meta.externalPrices.USD_XLM_change = _.round(cmcStellar.percent_change_24h, 6);
+                  StepLogger.log(`Phase 1: coinmarketcap request success`);
+                }
+            })
+    ]).then(() => StepLogger.log(`Phase 1 completed`))
 }
 
 function loadAssets(ticker) {
@@ -470,7 +478,6 @@ function getHorizonMain() {
     return rp(HORIZON_SERVER)
         .then(horizonMainJson => {
             let horizonMain = JSON.parse(horizonMainJson);
-            StepLogger.log(`Phase 1: getHorizonMain() success. HORIZON_SERVER = ${HORIZON_SERVER}`);
             TickerLogger.log('Phase 1: Horizon at ledger #' + horizonMain.core_latest_ledger);
             return horizonMain;
         })
@@ -483,7 +490,6 @@ function getStellarTermDotComVersion() {
             let search = indexHtml.match(/stBuildInfo=\{version:(\d+)/);
             if (search.length === 2) {
                 TickerLogger.log('Phase 1: https://stellarterm.com/ is at version ' + search[1]);
-                StepLogger.log(`Phase 1: getStellarTermDotComVersion() success. version = ${search[1]}`);
                 return search[1];
             }
             TickerLogger.error('Phase 1: Unable to find version');
