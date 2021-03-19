@@ -105,13 +105,7 @@ function phase1(ticker) {
             })
             .then(() => {
                 StepLogger.log(`Phase 1: start coinmarketcap request`);
-                return rp({
-                    method: 'GET',
-                    uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
-                    headers: {'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY},
-                    json: true,
-                    gzip: true
-                })
+                return coinmarketcapReqeust()
             })
             .then(cmcTickerJson => {
                 StepLogger.log(`Phase 1: coinmarketcap response received`);
@@ -127,6 +121,25 @@ function phase1(ticker) {
                 }
             })
     ]).then(() => StepLogger.log(`Phase 1 completed`))
+}
+
+function coinmarketcapReqeust(retryCount = 0) {
+  return  rp({
+      method: 'GET',
+      uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
+      headers: {'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY},
+      json: true,
+      gzip: true
+  }).then(cmcTickerJson => {
+      if (!cmcTickerJson.data.XLM && retryCount < 10) {
+          StepLogger.error(`Coinmarketcap missing response: retry attempt ${retryCount + 1}`);
+          return new Promise((resolve) => {
+              setTimeout(() => coinmarketcapReqeust(retryCount + 1).then(d => resolve(d)), 1000);
+          });
+      } else {
+          return cmcTickerJson;
+      }
+  })
 }
 
 function loadAssets(ticker) {
