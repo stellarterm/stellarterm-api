@@ -298,6 +298,14 @@ function phase3(ticker) {
                         asset.depth10_XLM = niceRound(pair.depth10Amount);
                         asset.depth10_USD = niceRound(asset.depth10_XLM * ticker._meta.externalPrices.USD_XLM);
                     })
+                    .catch((error) => {
+                        StepLogger.log(`Phase 3: request fails during tradeAggregation request for pair: ${pair}; slug: ${pairSlug}`);
+                        return Promise.reject(error);
+                    })
+            })
+            .catch((error) => {
+                StepLogger.log(`Phase 3: request fails for pair: ${pair}; slug: ${pairSlug}`);
+                return Promise.reject(error);
             })
     }))
         .then(() => {
