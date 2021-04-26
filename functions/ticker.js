@@ -156,7 +156,7 @@ function loadAssets(ticker) {
         price_USD: ticker._meta.externalPrices.USD_XLM,
     });
     directory.reset();
-    return directory.initializeAnchors(ANCHORS_SERVER).then(() => {
+    return directory.initializeIssuerOrgs(ANCHORS_SERVER).then(() => {
         ticker._meta.build_id = directory.buildID;
         _.each(directory.assets, (asset, id) => {
             let r = {};
