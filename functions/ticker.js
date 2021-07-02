@@ -10,7 +10,7 @@ const { HORIZON_SERVER, ANCHORS_SERVER } = require('./horizon-server.constant');
 const directory = require('stellarterm-directory');
 
 Server = new StellarSdk.Server(HORIZON_SERVER, {
-    appName: 'StellarTerm-JS-Backend',
+    appName: process.env.APP_NAME,
 });
 
 const TickerLogger = new Logger('Ticker successfully generated');
