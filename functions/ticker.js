@@ -126,7 +126,10 @@ function coinmarketcapReqeust(retryCount = 0) {
     return rp({
         method: 'GET',
         uri: 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=XLM',
-        headers: { 'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY },
+        headers: {
+            'X-CMC_PRO_API_KEY': process.env.COIN_MARKET_CUP_KEY,
+            'User-Agent': 'StellarTerm-Ticker'
+        },
         json: true,
         gzip: true,
     }).then(cmcTickerJson => {
