@@ -4,6 +4,7 @@ const rp = require('request-promise');
 const StellarSdk = require('stellar-sdk');
 const niceRound = require('./utils/niceRound');
 const Logger = require('./utils/logger');
+const hideCMCKey = require('./utils/hide-cmc-key');
 
 const { HORIZON_SERVER, ANCHORS_SERVER } = require('./horizon-server.constant');
 
@@ -46,10 +47,10 @@ function tickerGenerator() {
             }
             return {
                 files: {
-                    'v1/ticker-state.json': JSON.stringify({
+                    'v1/ticker-state.json': hideCMCKey(JSON.stringify({
                         tickerState: 'Ticker generation failed',
                         error: e,
-                    }),
+                    })),
                 },
                 log: StepLogger.getLogHistory(),
             };
