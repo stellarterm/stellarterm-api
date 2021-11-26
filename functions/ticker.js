@@ -280,7 +280,7 @@ function phase3(ticker) {
                                 return;
                             }
 
-                            pair.numTrades24h = _.sumBy(trades.records, record => record.trade_count);
+                            pair.numTrades24h = _.sumBy(trades.records, record => Number(record.trade_count));
                             asset.numTrades24h = pair.numTrades24h;
                             asset._numTradeRecords24h = trades.records.length;
 
