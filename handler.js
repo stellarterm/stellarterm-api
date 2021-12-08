@@ -1,6 +1,7 @@
 'use strict';
 
 const { tickerGenerator } = require('./functions/ticker');
+const { generate } = require('./functions/cmc-data-generator');
 const AWS = require('aws-sdk'); // eslint-disable-line import/no-extraneous-dependencies
 const _ = require('lodash');
 const Logger = require('./functions/utils/logger');
@@ -11,20 +12,24 @@ const LOG_FILE = 'v1/log.txt';
 module.exports.ticker = (event, context, callback) => {
     tickerGenerator()
         .then(({files, log}) => updateLog(log).then(() => files))
-        .then((files) => {
-            return Promise.all(_.map(files, (contents, filename) => {
-                return s3.putObject({
-                    Bucket: process.env.BUCKET,
-                    Key: filename,
-                    Body: contents,
-                    ContentType: 'application/json',
-                    ACL: 'public-read',
-                    CacheControl: 'public, max-age=50',
-                }).promise()
-            }))
-        })
+        .then((files) => putFiles(files))
+        .then(() => generate())
+        .then((files) => putFiles(files))
         .then(v => callback(null, v), callback);
 };
+
+function putFiles(files) {
+    return Promise.all(_.map(files, (contents, filename) => {
+        return s3.putObject({
+            Bucket: process.env.BUCKET,
+            Key: filename,
+            Body: contents,
+            ContentType: 'application/json',
+            ACL: 'public-read',
+            CacheControl: 'public, max-age=50',
+        }).promise()
+    }));
+}
 
 function updateLog(log) {
     return s3.getObject({
