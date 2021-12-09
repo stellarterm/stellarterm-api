@@ -18,31 +18,37 @@ function generate() {
     const end = Date.now();
     const start = end - PERIOD_24H;
     return directory.initializeIssuerOrgs(ANCHORS_SERVER)
-        .then(() => {
-            const requests = Object.values(directory.assets).map((asset) => {
-                const isCounterAsset = asset.code === 'BTC' || asset.is_counter_selling;
-                const base = !isCounterAsset ? new StellarSdk.Asset(asset.code, asset.issuer) : NATIVE;
-                const counter = isCounterAsset ? new StellarSdk.Asset(asset.code, asset.issuer) : NATIVE;
-                const ORDERBOOK = Server.orderbook(base, counter).call();
-                const TRADES_24h = Server.tradeAggregation(base, counter, start, end + RESOLUTION_15_MINUTES, RESOLUTION_15_MINUTES, 0)
-                    .limit(100).order('desc').call();
-                const LAST_TRADE = Server.tradeAggregation(base, counter, start, end + RESOLUTION_MINUTE, RESOLUTION_MINUTE, 0)
-                    .limit(1).order('desc').call();
-                return Promise.allSettled([ORDERBOOK, TRADES_24h, LAST_TRADE])
-                    .then(([orderbook, trades, lastTrade]) => [
-                        orderbook.status === 'fulfilled' ? orderbook.value : null,
-                        trades.status === 'fulfilled' ? trades.value : null,
-                        lastTrade.status === 'fulfilled' ? lastTrade.value : null,
-                        asset
-                    ]);
-            });
-            return Promise.all(requests);
-        })
+        .then(() => Object.values(directory.assets).filter(({unlisted, disabled}) => !unlisted && !disabled))
+        .then((assets) => assets.map((asset) => {
+            const isCounterAsset = asset.code === 'BTC' || asset.is_counter_selling;
+            const base = !isCounterAsset ? new StellarSdk.Asset(asset.code, asset.issuer) : NATIVE;
+            const counter = isCounterAsset ? new StellarSdk.Asset(asset.code, asset.issuer) : NATIVE;
+            if (base.code === counter.code) {
+                return null;
+            }
+            const ORDERBOOK = Server.orderbook(base, counter).call();
+            const TRADES_24h = Server.tradeAggregation(base, counter, start, end + RESOLUTION_15_MINUTES, RESOLUTION_15_MINUTES, 0)
+                .limit(100).order('desc').call();
+            const LAST_TRADE = Server.tradeAggregation(base, counter, start, end + RESOLUTION_MINUTE, RESOLUTION_MINUTE, 0)
+                .limit(1).order('desc').call();
+            return Promise.allSettled([ORDERBOOK, TRADES_24h, LAST_TRADE])
+                .then(([orderbook, trades, lastTrade]) => [
+                    orderbook.status === 'fulfilled' ? orderbook.value : null,
+                    trades.status === 'fulfilled' ? trades.value : null,
+                    lastTrade.status === 'fulfilled' ? lastTrade.value : null,
+                    asset
+                ]);
+        }))
+        .then((assetsRequests) => Promise.all(assetsRequests))
         .then((responses) => {
             const summary = {};
             const assets = {};
             const ticker = {};
-            responses.forEach(([orderbook, trades, lastTrade, asset]) => {
+            responses.forEach((response) => {
+                if (response === null) {
+                    return;
+                }
+                const [orderbook, trades, lastTrade, asset] = response;
                 const isCounterAsset = asset.code === 'BTC' || asset.is_counter_selling;
                 const highest_bid = orderbook && orderbook.bids.length ? parseFloat(orderbook.bids[0].price) : null;
                 const lowest_ask = orderbook && orderbook.asks.length ? parseFloat(orderbook.asks[0].price) : null;
@@ -75,7 +81,7 @@ function generate() {
                     base_currency: asset.code,
                     quote_currency: NATIVE.code
                 };
-                assets[trading_pairs] = {
+                assets[asset.code] = {
                     name: asset.code,
                     can_withdraw: true,
                     can_deposit: true,
