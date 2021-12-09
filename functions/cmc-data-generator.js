@@ -89,7 +89,7 @@ function generate() {
                     taker_fee: 0
                 };
                 if (asset.coinmarketcap_id) {
-                    assets[trading_pairs].unified_cryptoasset_id = asset.coinmarketcap_id;
+                    assets[asset.code].unified_cryptoasset_id = asset.coinmarketcap_id;
                 }
                 ticker[trading_pairs] = {
                     isFrozen: 0,
