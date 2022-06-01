@@ -28,6 +28,6 @@
     "stellarterm-directory": "git+https://github.com/stellarterm/stellarterm-directory.git"
   },
   "engines": {
-    "node": ">=7.4.0 <11.0.0"
+    "node": "^12"
   }
 }
