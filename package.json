@@ -24,10 +24,10 @@
     "p-queue": "^2.1.0",
     "request": "^2.88.0",
     "request-promise": "^4.2.1",
-    "stellar-sdk": "8.0.0",
+    "stellar-sdk": "10.4.1",
     "stellarterm-directory": "git+https://github.com/stellarterm/stellarterm-directory.git"
   },
   "engines": {
-    "node": "^12"
+    "node": ">=14"
   }
 }
