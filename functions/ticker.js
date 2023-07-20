@@ -4,7 +4,8 @@ const rp = require('request-promise');
 const StellarSdk = require('stellar-sdk');
 const niceRound = require('./utils/niceRound');
 const Logger = require('./utils/logger');
-const hideCMCKey = require('./utils/hide-cmc-key');
+const hideEnvKeys = require('./utils/hide-env-keys');
+const chunkedRequest = require('./utils/chunked-request');
 
 const { HORIZON_SERVER, ANCHORS_SERVER } = require('./horizon-server.constant');
 
@@ -47,7 +48,7 @@ function tickerGenerator() {
             }
             return {
                 files: {
-                    'v1/ticker-state.json': hideCMCKey(JSON.stringify({
+                    'v1/ticker-state.json': hideEnvKeys(JSON.stringify({
                         tickerState: 'Ticker generation failed',
                         error: e,
                     })),
@@ -184,132 +185,130 @@ function phase3(ticker) {
     let lumenVolumeXLM = 0;
     let lumenVolumeUSD = 0;
 
-    return Promise.all(_.map(ticker.pairs, (pair, pairSlug) => {
-            let baseBuying = new StellarSdk.Asset(pair.baseBuying.code, pair.baseBuying.issuer);
-            let counterSelling = new StellarSdk.Asset(pair.counterSelling.code, pair.counterSelling.issuer);
+    return chunkedRequest(Array.from(Object.entries(ticker.pairs)), ([pairSlug, pair]) => {
+        let baseBuying = new StellarSdk.Asset(pair.baseBuying.code, pair.baseBuying.issuer);
+        let counterSelling = new StellarSdk.Asset(pair.counterSelling.code, pair.counterSelling.issuer);
 
-            let asset;
-            if (baseBuying.isNative()) {
-                asset = _.find(ticker.assets, {
-                    code: pair.counterSelling.code,
-                    issuer: pair.counterSelling.issuer,
-                });
-                asset.topTradePairSlug = pairSlug;
-            } else if (counterSelling.isNative()) {
-                asset = _.find(ticker.assets, {
-                    code: pair.baseBuying.code,
-                    issuer: pair.baseBuying.issuer,
-                });
-                asset.topTradePairSlug = pairSlug;
-            }
+        let asset;
+        if (baseBuying.isNative()) {
+            asset = _.find(ticker.assets, {
+                code: pair.counterSelling.code,
+                issuer: pair.counterSelling.issuer,
+            });
+            asset.topTradePairSlug = pairSlug;
+        } else if (counterSelling.isNative()) {
+            asset = _.find(ticker.assets, {
+                code: pair.baseBuying.code,
+                issuer: pair.baseBuying.issuer,
+            });
+            asset.topTradePairSlug = pairSlug;
+        }
 
-            return Server.orderbook(baseBuying, counterSelling).call()
-                .then((res) => {
-                    if (res.bids.length === 0 || res.asks.length === 0) {
-                        return;
+        return Server.orderbook(baseBuying, counterSelling).call()
+            .then((res) => {
+                if (res.bids.length === 0 || res.asks.length === 0) {
+                    return;
+                }
+                pair.bid = _.round(res.bids[0].price, 7);
+                pair.ask = _.round(res.asks[0].price, 7);
+                pair.spread = _.round(1 - pair.bid / pair.ask, 4);
+                pair.price = _.round((parseFloat(pair.bid) + parseFloat(pair.ask)) / 2, 7);
+
+                if (pair.spread > 0.4 && counterSelling.isNative()) {
+                    pair.price = pair.bid;
+                }
+
+                // Depth of the market of both sides
+                let sum10PercentBidAmounts = _.sumBy(res.bids, bid => {
+                    if (parseFloat(bid.price) / pair.price >= 0.9) {
+                        return parseFloat(bid.amount);
                     }
-                    pair.bid = _.round(res.bids[0].price, 7);
-                    pair.ask = _.round(res.asks[0].price, 7);
-                    pair.spread = _.round(1 - pair.bid / pair.ask, 4);
-                    pair.price = _.round((parseFloat(pair.bid) + parseFloat(pair.ask)) / 2, 7);
-
-                    if (pair.spread > 0.4 && counterSelling.isNative()) {
-                        pair.price = pair.bid;
+                    return 0;
+                });
+                let sum10PercentAskAmounts = _.sumBy(res.asks, ask => {
+                    if (parseFloat(ask.price) / pair.price <= 1.1) {
+                        return parseFloat(ask.amount);
                     }
+                    return 0;
+                });
+                // We get the min so that it can't be gamed by the issuer making a large sell wall
+                pair.depth10Amount = _.round(Math.min(sum10PercentBidAmounts, sum10PercentAskAmounts));
+                return Server.tradeAggregation(baseBuying, counterSelling, Date.now() - 86400 * 1000, Date.now(), 900000, 0).limit(200).order('desc').call()
+                    .then(trades => {
+                        const XLMOldPrice = ticker._meta.externalPrices.USD_XLM_24hAgo;
+                        const XLMNewPrice = ticker._meta.externalPrices.USD_XLM;
 
-                    // Depth of the market of both sides
-                    let sum10PercentBidAmounts = _.sumBy(res.bids, bid => {
-                        if (parseFloat(bid.price) / pair.price >= 0.9) {
-                            return parseFloat(bid.amount);
-                        }
-                        return 0;
-                    });
-                    let sum10PercentAskAmounts = _.sumBy(res.asks, ask => {
-                        if (parseFloat(ask.price) / pair.price <= 1.1) {
-                            return parseFloat(ask.amount);
-                        }
-                        return 0;
-                    });
+                        if (baseBuying.isNative()) {
+                            asset.change24h_XLM = null;
+                            asset.change24h_USD = null;
 
+                            if (trades.records.length > 6) {
+                                let openXLM = 1 / medianOf3(Number(trades.records[trades.records.length - 1].close), Number(trades.records[trades.records.length - 2].close), Number(trades.records[trades.records.length - 3].close));
+                                let closeXLM = 1 / pair.price;
 
-                    // We get the min so that it can't be gamed by the issuer making a large sell wall
-                    pair.depth10Amount = _.round(Math.min(sum10PercentBidAmounts, sum10PercentAskAmounts));
-                    return Server.tradeAggregation(baseBuying, counterSelling, Date.now() - 86400 * 1000, Date.now(), 900000, 0).limit(200).order('desc').call()
-                        .then(trades => {
-                            const XLMOldPrice = ticker._meta.externalPrices.USD_XLM_24hAgo;
-                            const XLMNewPrice = ticker._meta.externalPrices.USD_XLM;
-
-                            if (baseBuying.isNative()) {
-                                asset.change24h_XLM = null;
-                                asset.change24h_USD = null;
-
-                                if (trades.records.length > 6) {
-                                    let openXLM = 1 / medianOf3(Number(trades.records[trades.records.length - 1].close), Number(trades.records[trades.records.length - 2].close), Number(trades.records[trades.records.length - 3].close));
-                                    let closeXLM = 1 / pair.price;
-
-                                    let openUSD = openXLM * XLMOldPrice;
-                                    let closeUSD = closeXLM * XLMNewPrice;
-                                    asset.change24h_XLM = _.round(100 * (closeXLM / openXLM - 1), 2);
-                                    asset.change24h_USD = _.round(100 * (closeUSD / openUSD - 1), 2);
-                                }
-
-                                asset.price_XLM = niceRound(1 / pair.price);
-                                asset.price_USD = niceRound(1 / pair.price * ticker._meta.externalPrices.USD_XLM);
-
-                                pair.volume24h_XLM = niceRound(_.sumBy(trades.records, record => Number(record.base_volume)));
-                            } else if (counterSelling.isNative()) {
-                                asset.change24h_XLM = null;
-                                asset.change24h_USD = null;
-
-                                asset.price_XLM = niceRound(pair.price);
-                                asset.price_USD = niceRound(pair.price * ticker._meta.externalPrices.USD_XLM);
-
-                                if (trades.records.length > 6) {
-                                    let openXLM = medianOf3(Number(trades.records[trades.records.length - 1].close), Number(trades.records[trades.records.length - 2].close), Number(trades.records[trades.records.length - 3].close));
-                                    let closeXLM = pair.price;
-
-                                    let openUSD = openXLM * XLMOldPrice;
-                                    let closeUSD = closeXLM * XLMNewPrice;
-                                    asset.change24h_XLM = _.round(100 * (closeXLM / openXLM - 1), 2);
-                                    asset.change24h_USD = _.round(100 * (closeUSD / openUSD - 1), 2);
-                                }
-                                pair.volume24h_XLM = niceRound(_.sumBy(trades.records, record => Number(record.counter_volume)));
-                            } else {
-                                // TODO: Add num trades for other trade pairs too
-                                TickerLogger.error('Error: No support in StellarTerm ticker for pairs without XLM. ' + pairSlug);
-                                return;
+                                let openUSD = openXLM * XLMOldPrice;
+                                let closeUSD = closeXLM * XLMNewPrice;
+                                asset.change24h_XLM = _.round(100 * (closeXLM / openXLM - 1), 2);
+                                asset.change24h_USD = _.round(100 * (closeUSD / openUSD - 1), 2);
                             }
 
-                            pair.numTrades24h = _.sumBy(trades.records, record => Number(record.trade_count));
-                            asset.numTrades24h = pair.numTrades24h;
-                            asset._numTradeRecords24h = trades.records.length;
+                            asset.price_XLM = niceRound(1 / pair.price);
+                            asset.price_USD = niceRound(1 / pair.price * ticker._meta.externalPrices.USD_XLM);
 
-                            TickerLogger.log('Phase 3: ', _.padEnd(pairSlug, 40), _.padStart(pair.numTrades24h + ' trades', 12), _.padStart(asset.price_XLM + ' XLM', 14), _.padStart('$' + asset.price_USD.toFixed(2), 9), 'Change XLM : ' + _.padStart(asset.change24h_XLM, 6) + '%', 'Change USD : ' + _.padStart(asset.change24h_USD, 6) + '%', _.padStart(trades.records.length, 4) + ' records');
+                            pair.volume24h_XLM = niceRound(_.sumBy(trades.records, record => Number(record.base_volume)));
+                        } else if (counterSelling.isNative()) {
+                            asset.change24h_XLM = null;
+                            asset.change24h_USD = null;
 
-                            asset.volume24h_XLM = pair.volume24h_XLM;
-                            asset.volume24h_USD = niceRound(pair.volume24h_XLM * ticker._meta.externalPrices.USD_XLM);
+                            asset.price_XLM = niceRound(pair.price);
+                            asset.price_USD = niceRound(pair.price * ticker._meta.externalPrices.USD_XLM);
 
-                            asset.spread = pair.spread;
-                            lumenVolumeXLM += pair.volume24h_XLM;
-                            lumenVolumeUSD += asset.volume24h_USD;
-                            asset.topTradePairSlug = pairSlug;
+                            if (trades.records.length > 6) {
+                                let openXLM = medianOf3(Number(trades.records[trades.records.length - 1].close), Number(trades.records[trades.records.length - 2].close), Number(trades.records[trades.records.length - 3].close));
+                                let closeXLM = pair.price;
 
-                            asset.numBids = res.bids.length;
-                            asset.numAsks = res.asks.length;
+                                let openUSD = openXLM * XLMOldPrice;
+                                let closeUSD = closeXLM * XLMNewPrice;
+                                asset.change24h_XLM = _.round(100 * (closeXLM / openXLM - 1), 2);
+                                asset.change24h_USD = _.round(100 * (closeUSD / openUSD - 1), 2);
+                            }
+                            pair.volume24h_XLM = niceRound(_.sumBy(trades.records, record => Number(record.counter_volume)));
+                        } else {
+                            // TODO: Add num trades for other trade pairs too
+                            TickerLogger.error('Error: No support in StellarTerm ticker for pairs without XLM. ' + pairSlug);
+                            return;
+                        }
 
-                            asset.depth10_XLM = niceRound(pair.depth10Amount);
-                            asset.depth10_USD = niceRound(asset.depth10_XLM * ticker._meta.externalPrices.USD_XLM);
-                        })
-                        .catch((error) => {
-                            StepLogger.log(`Phase 3: request fails during tradeAggregation request for pair: ${pair}; slug: ${pairSlug}`);
-                            return Promise.reject(error);
-                        });
-                })
-                .catch((error) => {
-                    StepLogger.log(`Phase 3: request fails for pair: ${pair}; slug: ${pairSlug}`);
-                    return Promise.reject(error);
-                });
-        }))
+                        pair.numTrades24h = _.sumBy(trades.records, record => Number(record.trade_count));
+                        asset.numTrades24h = pair.numTrades24h;
+                        asset._numTradeRecords24h = trades.records.length;
+
+                        TickerLogger.log('Phase 3: ', _.padEnd(pairSlug, 40), _.padStart(pair.numTrades24h + ' trades', 12), _.padStart(asset.price_XLM + ' XLM', 14), _.padStart('$' + asset.price_USD.toFixed(2), 9), 'Change XLM : ' + _.padStart(asset.change24h_XLM, 6) + '%', 'Change USD : ' + _.padStart(asset.change24h_USD, 6) + '%', _.padStart(trades.records.length, 4) + ' records');
+
+                        asset.volume24h_XLM = pair.volume24h_XLM;
+                        asset.volume24h_USD = niceRound(pair.volume24h_XLM * ticker._meta.externalPrices.USD_XLM);
+
+                        asset.spread = pair.spread;
+                        lumenVolumeXLM += pair.volume24h_XLM;
+                        lumenVolumeUSD += asset.volume24h_USD;
+                        asset.topTradePairSlug = pairSlug;
+
+                        asset.numBids = res.bids.length;
+                        asset.numAsks = res.asks.length;
+
+                        asset.depth10_XLM = niceRound(pair.depth10Amount);
+                        asset.depth10_USD = niceRound(asset.depth10_XLM * ticker._meta.externalPrices.USD_XLM);
+                    })
+                    .catch((error) => {
+                        StepLogger.log(`Phase 3: request fails during tradeAggregation request for pair: ${pair}; slug: ${pairSlug}`);
+                        return Promise.reject(error);
+                    });
+            })
+            .catch((error) => {
+                StepLogger.log(`Phase 3: request fails for pair: ${pair}; slug: ${pairSlug}`);
+                return error && error.response && error.response.status === 404 ? Promise.resolve() : Promise.reject(error);
+            });
+    })
         .then(() => {
             StepLogger.log(`Phase 3: all requests succeeded`);
             ticker.assets[0].volume24h_XLM = niceRound(lumenVolumeXLM);
@@ -498,7 +497,15 @@ function getLumenPrice() {
 }
 
 function getHorizonMain() {
-    return rp(HORIZON_SERVER)
+    return rp({
+            method: 'GET',
+            uri: HORIZON_SERVER,
+            headers: {
+                'X-App-Name': process.env.APP_NAME,
+                'User-Agent': process.env.APP_NAME
+            },
+            gzip: true,
+        })
         .then(horizonMainJson => {
             let horizonMain = JSON.parse(horizonMainJson);
             TickerLogger.log('Phase 1: Horizon at ledger #' + horizonMain.core_latest_ledger);
