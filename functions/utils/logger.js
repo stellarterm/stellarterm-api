@@ -1,4 +1,4 @@
-const hideCMCKey = require('./hide-cmc-key');
+const hideEnvKeys = require('./hide-env-keys');
 
 const LOG_PERIOD = 1000 * 60 * 60 * 24;
 const DIVIDER_SIGN = '*';
@@ -17,7 +17,7 @@ module.exports = class Logger {
     }
 
     getLogHistory(shortOnSuccess) {
-        const message = shortOnSuccess && !this._errorsExists ? this._shortMessage : hideCMCKey(this._logHistory.trim());
+        const message = shortOnSuccess && !this._errorsExists ? this._shortMessage : hideEnvKeys(this._logHistory.trim());
         return `${DIVIDER}\n${this._startingMessage}\n\n${message}\n${DIVIDER}`;
     }
 
