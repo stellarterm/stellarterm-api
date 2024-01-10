@@ -1,5 +1,5 @@
 const _ = require('lodash');
-const StellarSdk = require('stellar-sdk');
+const StellarSdk = require('@stellar/stellar-sdk');
 
 let tradeWalker = {};
 
