@@ -113,7 +113,6 @@ function phase1(ticker) {
                 if (!cmcTickerJson.data.XLM) {
                     StepLogger.error(`Coinmarketcap missing response: ${JSON.stringify(cmcTickerJson)}`);
                 } else {
-                    console.log(cmcTickerJson)
                     let cmcStellar = cmcTickerJson.data.XLM.quote.USD;
                     let newPriceRatio = 1 + Number(cmcStellar.percent_change_24h) / 100;
                     let oldPrice = (1 / newPriceRatio) * ticker._meta.externalPrices.USD_XLM;
