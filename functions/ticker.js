@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const _ = require('lodash');
 const rp = require('request-promise');
-const StellarSdk = require('stellar-sdk');
+const StellarSdk = require('@stellar/stellar-sdk');
 const niceRound = require('./utils/niceRound');
 const Logger = require('./utils/logger');
 const hideEnvKeys = require('./utils/hide-env-keys');
@@ -11,7 +11,7 @@ const { HORIZON_SERVER, ANCHORS_SERVER } = require('./horizon-server.constant');
 
 const directory = require('stellarterm-directory');
 
-Server = new StellarSdk.Server(HORIZON_SERVER, {
+Server = new StellarSdk.Horizon.Server(HORIZON_SERVER, {
     appName: process.env.APP_NAME,
 });
 
@@ -113,6 +113,7 @@ function phase1(ticker) {
                 if (!cmcTickerJson.data.XLM) {
                     StepLogger.error(`Coinmarketcap missing response: ${JSON.stringify(cmcTickerJson)}`);
                 } else {
+                    console.log(cmcTickerJson)
                     let cmcStellar = cmcTickerJson.data.XLM.quote.USD;
                     let newPriceRatio = 1 + Number(cmcStellar.percent_change_24h) / 100;
                     let oldPrice = (1 / newPriceRatio) * ticker._meta.externalPrices.USD_XLM;

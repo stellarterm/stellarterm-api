@@ -16,6 +16,7 @@
   },
   "homepage": "https://github.com/stellarterm/stellarterm-api",
   "dependencies": {
+    "@stellar/stellar-sdk": "^11.1.0",
     "aws-sdk": "^2.465.0",
     "bluebird": "^3.5.0",
     "lodash": "^4.17.11",
@@ -24,7 +25,6 @@
     "p-queue": "^2.1.0",
     "request": "^2.88.0",
     "request-promise": "^4.2.1",
-    "stellar-sdk": "10.4.1",
     "stellarterm-directory": "git+https://github.com/stellarterm/stellarterm-directory.git#staging"
   },
   "engines": {

@@ -1,8 +1,8 @@
 const { HORIZON_SERVER, ANCHORS_SERVER } = require('./horizon-server.constant');
-const StellarSdk = require('stellar-sdk');
+const StellarSdk = require('@stellar/stellar-sdk');
 const directory = require('stellarterm-directory');
 
-const Server = new StellarSdk.Server(HORIZON_SERVER, {
+const Server = new StellarSdk.Horizon.Server(HORIZON_SERVER, {
     appName: process.env.APP_NAME,
 });
 

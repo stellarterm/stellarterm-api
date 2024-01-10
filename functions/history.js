@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const _ = require('lodash');
 const rp = require('request-promise');
-const StellarSdk = require('stellar-sdk');
+const StellarSdk = require('@stellar/stellar-sdk');
 
 const PQueue = require('p-queue');
 const queue = new PQueue({concurrency: 20});
@@ -11,7 +11,7 @@ const { HORIZON_SERVER } = require('./horizon-server.constant');
 
 const directory = require('stellarterm-directory');
 
-S = new StellarSdk.Server(HORIZON_SERVER, { appName: 'StellarTerm-JS-Backend'});
+S = new StellarSdk.Horizon.Server(HORIZON_SERVER, { appName: 'StellarTerm-JS-Backend'});
 
 function historyGenerator() {
     let ticker = {
